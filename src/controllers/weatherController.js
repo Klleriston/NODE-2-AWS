@@ -1,9 +1,9 @@
-import weather from "../models/Weather.js"
+import Weather from "../models/Weather.js"
 import axios from "axios";
 
 class WeatherController {
     static async getOnlyCity(req, res) {
-        const city = req.query.city;
+        const city = req.query;
         try {
             const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.KEY}`);
             const weatherData = response.data;
@@ -57,6 +57,42 @@ class WeatherController {
                     weather: weatherList
                 }
             });          
+        } catch (error) {
+            res.status(500).json({
+                message: `Error :( - ${error.message}`
+            });
+        }
+    }
+
+    static async postWeather(req, res) {
+        const { city } = req.query;
+        try {
+            const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.KEY}`);
+            
+            const weatherData = response.data;
+            const temperatureCelsius = (weatherData.main.temp - 273.15).toFixed(2);
+            const feelsCelsius = (weatherData.main.feels_like - 273.15).toFixed(2);
+
+            const newWeather = new Weather({
+                name: weatherData.name,
+                weather: {
+                    temperature: temperatureCelsius,
+                    feels_like: feelsCelsius,
+                }
+            });
+
+            await newWeather.save();
+            res.status(200).json({
+                message: "Success",
+                city: {
+                    name: weatherData.name,
+                    weather: {
+                        temperature: temperatureCelsius,
+                        feels_like: feelsCelsius,
+                    }
+                }
+            });
+
         } catch (error) {
             res.status(500).json({
                 message: `Error :( - ${error.message}`
