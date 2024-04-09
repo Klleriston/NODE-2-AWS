@@ -1,9 +1,10 @@
 import Weather from "../models/Weather.js"
+import AWS from 'aws-sdk';
 import axios from "axios";
 
 class WeatherController {
     static async getOnlyCity(req, res) {
-        const city = req.query;
+        const {city} = req.query;
         try {
             const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.KEY}`);
             const weatherData = response.data;
@@ -56,7 +57,7 @@ class WeatherController {
                     name: city,
                     weather: weatherList
                 }
-            });          
+            });
         } catch (error) {
             res.status(500).json({
                 message: `Error :( - ${error.message}`
@@ -64,11 +65,11 @@ class WeatherController {
         }
     }
 
-    static async postWeather(req, res) {
-        const { city } = req.query;
+    static async postWeather(event) {
         try {
+            const city = "London";
+
             const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.KEY}`);
-            
             const weatherData = response.data;
             const temperatureCelsius = (weatherData.main.temp - 273.15).toFixed(2);
             const feelsCelsius = (weatherData.main.feels_like - 273.15).toFixed(2);
@@ -81,24 +82,41 @@ class WeatherController {
                 }
             });
 
+            const lambda = new AWS.Lambda();
+            const params = {
+                FunctionName: 'crawler',
+                Payload: JSON.stringify({ city })
+            };
+            
+            const lambdaResponse = await lambda.invoke(params).promise();
+            const lambdaData = JSON.parse(lambdaResponse.Payload);
             await newWeather.save();
-            res.status(200).json({
-                message: "Success",
-                city: {
-                    name: weatherData.name,
-                    weather: {
-                        temperature: temperatureCelsius,
-                        feels_like: feelsCelsius,
-                    }
-                }
-            });
-
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "Success",
+                    city: lambdaData.city
+                })
+            };
         } catch (error) {
-            res.status(500).json({
-                message: `Error :( - ${error.message}`
-            });
+            return {
+                statusCode: 500,
+                body: JSON.stringify({
+                    message: `Error :( - ${error.message}`
+                })
+            };
         }
     }
-}
+};
+
+AWS.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION
+});
+
+export const handler = async (event) => {
+    return await WeatherController.postWeather(event);
+};
 
 export default WeatherController;
